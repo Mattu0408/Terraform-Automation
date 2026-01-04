@@ -10,6 +10,41 @@ resource "aws_vpc" "main" {
   }
 }
 
+# Create a public subnet and internet gateway for public instances
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "172.16.1.0/24"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "${var.tag_name}-public-subnet"
+  }
+}
+
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = "${var.tag_name}-igw"
+  }
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "${var.tag_name}-public-rt"
+  }
+}
+
+resource "aws_route_table_association" "public_assoc" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
 #Create security group with firewall rules
 resource "aws_security_group" "jenkins-sg-2022" {
   name        = var.security_group
@@ -46,6 +81,8 @@ resource "aws_instance" "myFirstInstance" {
   ami           = var.ami_id
   key_name = var.key_name
   instance_type = var.instance_type
+  subnet_id = aws_subnet.public.id
+  associate_public_ip_address = true
   vpc_security_group_ids = [aws_security_group.jenkins-sg-2022.id]
 
   # Set root volume size to 20 GB
@@ -58,13 +95,13 @@ resource "aws_instance" "myFirstInstance" {
   tags= {
     Name = var.tag_name
   }
-}
+} 
 
 # Create Elastic IP address
 resource "aws_eip" "myFirstInstance" {
- // vpc      = true
+  vpc      = true
   instance = aws_instance.myFirstInstance.id
-tags= {
+  tags= {
     Name = "my_elastic_ip"
   }
 }
